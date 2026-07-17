@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const config = require('./config/env');
 const apiRoutes = require('./routes');
+const setupSwagger = require('./config/swaggerSetup');
 
 const app = express();
 
@@ -13,8 +14,14 @@ app.use(
 );
 app.use(express.json());
 
+setupSwagger(app);
+
 app.get('/', (_req, res) => {
-  res.json({ message: 'Spentra API is running', docs: '/api' });
+  res.json({
+    message: 'Spentra API is running',
+    docs: '/api-docs',
+    openapi: '/api-docs.json',
+  });
 });
 
 app.use('/api', apiRoutes);
