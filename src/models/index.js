@@ -1,2 +1,5 @@
-// Models will be added in Phase 1 (User) and Phase 2 (Expense)
-module.exports = {};
+const User = require('./User');
+
+module.exports = {
+  User,
+};
