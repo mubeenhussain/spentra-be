@@ -1,8 +1,8 @@
 const express = require('express');
+const authRoutes = require('./authRoutes');
 
 const router = express.Router();
 
-// Auth and expense routes mount here in later phases
 router.get('/', (_req, res) => {
   res.json({
     message: 'Spentra API',
@@ -10,5 +10,7 @@ router.get('/', (_req, res) => {
     base: '/api',
   });
 });
+
+router.use('/auth', authRoutes);
 
 module.exports = router;
