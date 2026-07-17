@@ -83,4 +83,16 @@ async function login(req, res, next) {
   }
 }
 
-module.exports = { register, login };
+async function me(req, res) {
+  return res.status(200).json({
+    user: {
+      _id: req.user._id,
+      name: req.user.name,
+      email: req.user.email,
+      createdAt: req.user.createdAt,
+      updatedAt: req.user.updatedAt,
+    },
+  });
+}
+
+module.exports = { register, login, me };
