@@ -87,10 +87,90 @@ const options = {
             password: { type: 'string', example: 'secret123' },
           },
         },
+        ExpenseCategory: {
+          type: 'string',
+          enum: [
+            'Food',
+            'Transport',
+            'Rent',
+            'Utilities',
+            'Entertainment',
+            'Shopping',
+            'Health',
+            'Other',
+          ],
+        },
+        Expense: {
+          type: 'object',
+          properties: {
+            _id: { type: 'string' },
+            userId: { type: 'string' },
+            title: { type: 'string', example: 'Lunch' },
+            amount: { type: 'number', example: 12.5 },
+            category: { $ref: '#/components/schemas/ExpenseCategory' },
+            date: { type: 'string', format: 'date-time' },
+            note: { type: 'string', example: 'With coworkers' },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
+          },
+        },
+        ExpenseInput: {
+          type: 'object',
+          required: ['title', 'amount', 'category', 'date'],
+          properties: {
+            title: { type: 'string', example: 'Lunch' },
+            amount: { type: 'number', exclusiveMinimum: 0, example: 12.5 },
+            category: { $ref: '#/components/schemas/ExpenseCategory' },
+            date: {
+              type: 'string',
+              format: 'date-time',
+              example: '2026-07-18T12:00:00.000Z',
+            },
+            note: { type: 'string', example: 'With coworkers' },
+          },
+        },
+        ExpenseUpdateInput: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            amount: { type: 'number', exclusiveMinimum: 0 },
+            category: { $ref: '#/components/schemas/ExpenseCategory' },
+            date: { type: 'string', format: 'date-time' },
+            note: { type: 'string' },
+          },
+        },
+        ExpenseResponse: {
+          type: 'object',
+          properties: {
+            expense: { $ref: '#/components/schemas/Expense' },
+          },
+        },
+        PaginationMeta: {
+          type: 'object',
+          properties: {
+            total: { type: 'integer', example: 42 },
+            page: { type: 'integer', example: 1 },
+            limit: { type: 'integer', example: 20 },
+            totalPages: { type: 'integer', example: 3 },
+            hasNextPage: { type: 'boolean' },
+            hasPrevPage: { type: 'boolean' },
+          },
+        },
+        ExpenseListResponse: {
+          type: 'object',
+          properties: {
+            expenses: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Expense' },
+            },
+            meta: { $ref: '#/components/schemas/PaginationMeta' },
+          },
+        },
       },
     },
     tags: [
       { name: 'Auth', description: 'Register, login, and current user' },
+      { name: 'Expenses', description: 'Personal expense CRUD' },
     ],
   },
   apis: ['./src/routes/*.js'],

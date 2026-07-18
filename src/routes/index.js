@@ -1,5 +1,6 @@
 const express = require('express');
 const authRoutes = require('./authRoutes');
+const expenseRoutes = require('./expenseRoutes');
 
 const router = express.Router();
 
@@ -12,5 +13,6 @@ router.get('/', (_req, res) => {
 });
 
 router.use('/auth', authRoutes);
+router.use('/expenses', expenseRoutes);
 
 module.exports = router;
