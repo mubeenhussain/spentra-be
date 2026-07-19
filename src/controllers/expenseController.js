@@ -15,24 +15,33 @@ function formatExpense(expense) {
   };
 }
 
-async function createExpense(req, res, next) {
-  try {
-    const { title, amount, category, date, note } = req.body;
+function buildExpensePayload(item, userId) {
+  const { title, amount, category, date, note } = item;
 
-    if (!title || amount === undefined || !category || !date) {
-      return res.status(400).json({
-        message: 'Title, amount, category, and date are required',
-      });
-    }
+  if (amount === undefined || !category || !date) {
+    return { error: 'Amount, category, and date are required for each expense' };
+  }
 
-    const expense = await Expense.create({
-      userId: req.user._id,
-      title,
+  return {
+    data: {
+      userId,
+      title: (title && String(title).trim()) || category,
       amount,
       category,
       date,
       note: note || '',
-    });
+    },
+  };
+}
+
+async function createExpense(req, res, next) {
+  try {
+    const built = buildExpensePayload(req.body, req.user._id);
+    if (built.error) {
+      return res.status(400).json({ message: built.error });
+    }
+
+    const expense = await Expense.create(built.data);
 
     return res.status(201).json({ expense: formatExpense(expense) });
   } catch (err) {
@@ -41,6 +50,57 @@ async function createExpense(req, res, next) {
         .map((e) => e.message)
         .join(', ');
       return res.status(400).json({ message });
+    }
+    return next(err);
+  }
+}
+
+async function createExpensesBulk(req, res, next) {
+  try {
+    const items = Array.isArray(req.body) ? req.body : req.body?.expenses;
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({
+        message: 'Send a non-empty expenses array',
+      });
+    }
+
+    if (items.length > 50) {
+      return res.status(400).json({
+        message: 'You can add at most 50 expenses at once',
+      });
+    }
+
+    const docs = [];
+    const errors = [];
+
+    items.forEach((item, index) => {
+      const built = buildExpensePayload(item || {}, req.user._id);
+      if (built.error) {
+        errors.push({ index, message: built.error });
+        return;
+      }
+      docs.push(built.data);
+    });
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        message: 'Some expenses are invalid',
+        errors,
+      });
+    }
+
+    const created = await Expense.insertMany(docs, { ordered: true });
+
+    return res.status(201).json({
+      count: created.length,
+      expenses: created.map(formatExpense),
+    });
+  } catch (err) {
+    if (err.name === 'ValidationError' || err.name === 'BulkWriteError') {
+      return res.status(400).json({
+        message: err.message || 'Failed to create expenses',
+      });
     }
     return next(err);
   }
@@ -186,6 +246,7 @@ async function deleteExpense(req, res, next) {
 
 module.exports = {
   createExpense,
+  createExpensesBulk,
   listExpenses,
   getExpense,
   updateExpense,

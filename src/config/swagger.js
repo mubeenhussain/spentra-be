@@ -116,17 +116,55 @@ const options = {
         },
         ExpenseInput: {
           type: 'object',
-          required: ['title', 'amount', 'category', 'date'],
+          required: ['amount', 'category', 'date'],
           properties: {
-            title: { type: 'string', example: 'Lunch' },
-            amount: { type: 'number', exclusiveMinimum: 0, example: 12.5 },
+            title: {
+              type: 'string',
+              example: 'Lunch',
+              description: 'Optional — defaults to category if omitted',
+            },
+            amount: { type: 'number', exclusiveMinimum: 0, example: 100 },
             category: { $ref: '#/components/schemas/ExpenseCategory' },
             date: {
               type: 'string',
               format: 'date-time',
-              example: '2026-07-18T12:00:00.000Z',
+              example: '2026-07-19T12:00:00.000Z',
             },
             note: { type: 'string', example: 'With coworkers' },
+          },
+        },
+        ExpenseBulkInput: {
+          type: 'object',
+          required: ['expenses'],
+          properties: {
+            expenses: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 50,
+              items: { $ref: '#/components/schemas/ExpenseInput' },
+              example: [
+                {
+                  amount: 100,
+                  category: 'Food',
+                  date: '2026-07-19T12:00:00.000Z',
+                },
+                {
+                  amount: 50,
+                  category: 'Transport',
+                  date: '2026-07-19T12:00:00.000Z',
+                },
+              ],
+            },
+          },
+        },
+        ExpenseBulkResponse: {
+          type: 'object',
+          properties: {
+            count: { type: 'integer', example: 2 },
+            expenses: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/Expense' },
+            },
           },
         },
         ExpenseUpdateInput: {

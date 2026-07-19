@@ -1,6 +1,7 @@
 const express = require('express');
 const {
   createExpense,
+  createExpensesBulk,
   listExpenses,
   getExpense,
   updateExpense,
@@ -47,6 +48,45 @@ router.use(protect);
  *               $ref: '#/components/schemas/Error'
  */
 router.post('/', createExpense);
+
+/**
+ * @swagger
+ * /api/expenses/bulk:
+ *   post:
+ *     tags: [Expenses]
+ *     summary: Create multiple expenses at once
+ *     description: >
+ *       Submit several expense rows in one request (e.g. Food, then Transport, then Rent).
+ *       Each item is saved as its own expense document for the logged-in user.
+ *     security:
+ *       - bearerAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ExpenseBulkInput'
+ *     responses:
+ *       201:
+ *         description: Expenses created
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/ExpenseBulkResponse'
+ *       400:
+ *         description: Validation error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ *       401:
+ *         description: Unauthorized
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/Error'
+ */
+router.post('/bulk', createExpensesBulk);
 
 /**
  * @swagger
