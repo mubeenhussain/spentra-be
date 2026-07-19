@@ -2,9 +2,21 @@ const bcrypt = require('bcryptjs');
 const User = require('../models/User');
 const generateToken = require('../utils/generateToken');
 
+function formatUser(user) {
+  return {
+    _id: user._id,
+    name: user.name,
+    email: user.email,
+    currency: user.currency || 'PKR',
+    location: user.location || '',
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  };
+}
+
 async function register(req, res, next) {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, currency, location } = req.body;
 
     if (!name || !email || !password) {
       return res.status(400).json({ message: 'Name, email, and password are required' });
@@ -20,19 +32,19 @@ async function register(req, res, next) {
     }
 
     const passwordHash = await bcrypt.hash(password, 12);
-    const user = await User.create({ name, email, passwordHash });
+    const user = await User.create({
+      name,
+      email,
+      passwordHash,
+      ...(currency !== undefined ? { currency } : {}),
+      ...(location !== undefined ? { location } : {}),
+    });
 
     const token = generateToken(user._id);
 
     return res.status(201).json({
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
+      user: formatUser(user),
     });
   } catch (err) {
     if (err.code === 11000) {
@@ -70,13 +82,7 @@ async function login(req, res, next) {
 
     return res.status(200).json({
       token,
-      user: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
+      user: formatUser(user),
     });
   } catch (err) {
     return next(err);
@@ -85,13 +91,7 @@ async function login(req, res, next) {
 
 async function me(req, res) {
   return res.status(200).json({
-    user: {
-      _id: req.user._id,
-      name: req.user.name,
-      email: req.user.email,
-      createdAt: req.user.createdAt,
-      updatedAt: req.user.updatedAt,
-    },
+    user: formatUser(req.user),
   });
 }
 

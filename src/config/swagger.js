@@ -36,6 +36,15 @@ const options = {
               format: 'email',
               example: 'test@example.com',
             },
+            currency: {
+              type: 'string',
+              example: 'PKR',
+              description: 'ISO 4217 currency code',
+            },
+            location: {
+              type: 'string',
+              example: 'Karachi, Pakistan',
+            },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
@@ -73,6 +82,18 @@ const options = {
               example: 'test@example.com',
             },
             password: { type: 'string', minLength: 6, example: 'secret123' },
+            currency: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 3,
+              example: 'PKR',
+              description: 'Optional — defaults to PKR',
+            },
+            location: {
+              type: 'string',
+              example: 'Karachi, Pakistan',
+              description: 'Optional — city/country',
+            },
           },
         },
         LoginInput: {
