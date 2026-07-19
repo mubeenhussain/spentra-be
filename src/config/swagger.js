@@ -108,6 +108,27 @@ const options = {
             password: { type: 'string', example: 'secret123' },
           },
         },
+        UpdateProfileInput: {
+          type: 'object',
+          properties: {
+            name: { type: 'string', minLength: 2, example: 'Updated Name' },
+            email: {
+              type: 'string',
+              format: 'email',
+              example: 'new@example.com',
+            },
+            currency: {
+              type: 'string',
+              minLength: 3,
+              maxLength: 3,
+              example: 'USD',
+            },
+            location: {
+              type: 'string',
+              example: 'Lahore, Pakistan',
+            },
+          },
+        },
         ExpenseCategory: {
           type: 'string',
           enum: [

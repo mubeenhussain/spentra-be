@@ -95,4 +95,60 @@ async function me(req, res) {
   });
 }
 
-module.exports = { register, login, me };
+async function updateProfile(req, res, next) {
+  try {
+    const allowed = ['name', 'email', 'currency', 'location'];
+    const updates = {};
+
+    for (const key of allowed) {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({
+        message: 'Provide at least one field: name, email, currency, location',
+      });
+    }
+
+    if (updates.email) {
+      const email = String(updates.email).toLowerCase().trim();
+      const taken = await User.findOne({
+        email,
+        _id: { $ne: req.user._id },
+      });
+      if (taken) {
+        return res.status(409).json({ message: 'Email already registered' });
+      }
+      updates.email = email;
+    }
+
+    const user = await User.findByIdAndUpdate(
+      req.user._id,
+      { $set: updates },
+      { new: true, runValidators: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    return res.status(200).json({
+      user: formatUser(user),
+    });
+  } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ message: 'Email already registered' });
+    }
+    if (err.name === 'ValidationError') {
+      const message = Object.values(err.errors)
+        .map((e) => e.message)
+        .join(', ');
+      return res.status(400).json({ message });
+    }
+    return next(err);
+  }
+}
+
+module.exports = { register, login, me, updateProfile };
