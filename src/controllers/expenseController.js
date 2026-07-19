@@ -1,22 +1,8 @@
 const mongoose = require('mongoose');
 const Expense = require('../models/Expense');
 
-function formatExpense(expense) {
-  return {
-    _id: expense._id,
-    userId: expense.userId,
-    title: expense.title,
-    amount: expense.amount,
-    category: expense.category,
-    date: expense.date,
-    note: expense.note,
-    createdAt: expense.createdAt,
-    updatedAt: expense.updatedAt,
-  };
-}
-
-function buildExpensePayload(item, userId) {
-  const { title, amount, category, date, note } = item;
+function normalizeItem(item) {
+  const { title, amount, category, date, note } = item || {};
 
   if (amount === undefined || !category || !date) {
     return { error: 'Amount, category, and date are required for each expense' };
@@ -24,7 +10,6 @@ function buildExpensePayload(item, userId) {
 
   return {
     data: {
-      userId,
       title: (title && String(title).trim()) || category,
       amount,
       category,
@@ -34,16 +19,110 @@ function buildExpensePayload(item, userId) {
   };
 }
 
+function summarizeItems(items) {
+  const totalAmount = items.reduce((sum, item) => sum + Number(item.amount), 0);
+  const date = new Date(
+    Math.max(...items.map((item) => new Date(item.date).getTime()))
+  );
+  return { totalAmount, date };
+}
+
+function formatItem(item) {
+  return {
+    _id: item._id,
+    title: item.title,
+    amount: item.amount,
+    category: item.category,
+    date: item.date,
+    note: item.note,
+  };
+}
+
+function formatRecord(doc) {
+  const items = (doc.items || []).map(formatItem);
+
+  if (doc.kind === 'bulk') {
+    return {
+      kind: 'bulk',
+      _id: doc._id,
+      userId: doc.userId,
+      date: doc.date,
+      totalAmount: doc.totalAmount,
+      count: items.length,
+      items,
+      createdAt: doc.createdAt,
+      updatedAt: doc.updatedAt,
+    };
+  }
+
+  const item = items[0];
+  return {
+    kind: 'single',
+    _id: doc._id,
+    userId: doc.userId,
+    title: item.title,
+    amount: item.amount,
+    category: item.category,
+    date: item.date,
+    note: item.note,
+    totalAmount: doc.totalAmount,
+    items,
+    createdAt: doc.createdAt,
+    updatedAt: doc.updatedAt,
+  };
+}
+
+function buildMatchFilter(userId, query) {
+  const { from, to, category } = query;
+  const filter = { userId };
+
+  if (category) {
+    filter['items.category'] = category;
+  }
+
+  if (from || to) {
+    filter.date = {};
+    if (from) {
+      const fromDate = new Date(from);
+      if (Number.isNaN(fromDate.getTime())) {
+        return { error: 'Invalid from date' };
+      }
+      filter.date.$gte = fromDate;
+    }
+    if (to) {
+      const toDate = new Date(to);
+      if (Number.isNaN(toDate.getTime())) {
+        return { error: 'Invalid to date' };
+      }
+      filter.date.$lte = toDate;
+    }
+  }
+
+  return { filter };
+}
+
 async function createExpense(req, res, next) {
   try {
-    const built = buildExpensePayload(req.body, req.user._id);
+    const built = normalizeItem(req.body);
     if (built.error) {
       return res.status(400).json({ message: built.error });
     }
 
-    const expense = await Expense.create(built.data);
+    const items = [built.data];
+    const { totalAmount, date } = summarizeItems(items);
 
-    return res.status(201).json({ expense: formatExpense(expense) });
+    const expense = await Expense.create({
+      userId: req.user._id,
+      kind: 'single',
+      items,
+      date,
+      totalAmount,
+    });
+
+    return res.status(201).json({
+      kind: 'single',
+      expense: formatRecord(expense),
+    });
   } catch (err) {
     if (err.name === 'ValidationError') {
       const message = Object.values(err.errors)
@@ -57,30 +136,30 @@ async function createExpense(req, res, next) {
 
 async function createExpensesBulk(req, res, next) {
   try {
-    const items = Array.isArray(req.body) ? req.body : req.body?.expenses;
+    const rawItems = Array.isArray(req.body) ? req.body : req.body?.expenses;
 
-    if (!Array.isArray(items) || items.length === 0) {
+    if (!Array.isArray(rawItems) || rawItems.length === 0) {
       return res.status(400).json({
         message: 'Send a non-empty expenses array',
       });
     }
 
-    if (items.length > 50) {
+    if (rawItems.length > 50) {
       return res.status(400).json({
         message: 'You can add at most 50 expenses at once',
       });
     }
 
-    const docs = [];
+    const items = [];
     const errors = [];
 
-    items.forEach((item, index) => {
-      const built = buildExpensePayload(item || {}, req.user._id);
+    rawItems.forEach((item, index) => {
+      const built = normalizeItem(item);
       if (built.error) {
         errors.push({ index, message: built.error });
         return;
       }
-      docs.push(built.data);
+      items.push(built.data);
     });
 
     if (errors.length > 0) {
@@ -90,17 +169,24 @@ async function createExpensesBulk(req, res, next) {
       });
     }
 
-    const created = await Expense.insertMany(docs, { ordered: true });
+    const { totalAmount, date } = summarizeItems(items);
 
-    return res.status(201).json({
-      count: created.length,
-      expenses: created.map(formatExpense),
+    // ONE MongoDB document for the whole bulk upload
+    const expense = await Expense.create({
+      userId: req.user._id,
+      kind: 'bulk',
+      items,
+      date,
+      totalAmount,
     });
+
+    return res.status(201).json(formatRecord(expense));
   } catch (err) {
-    if (err.name === 'ValidationError' || err.name === 'BulkWriteError') {
-      return res.status(400).json({
-        message: err.message || 'Failed to create expenses',
-      });
+    if (err.name === 'ValidationError') {
+      const message = Object.values(err.errors)
+        .map((e) => e.message)
+        .join(', ');
+      return res.status(400).json({ message });
     }
     return next(err);
   }
@@ -108,44 +194,24 @@ async function createExpensesBulk(req, res, next) {
 
 async function listExpenses(req, res, next) {
   try {
-    const { from, to, category } = req.query;
     const page = Math.max(1, parseInt(req.query.page, 10) || 1);
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
 
-    const filter = { userId: req.user._id };
-
-    if (category) {
-      filter.category = category;
-    }
-
-    if (from || to) {
-      filter.date = {};
-      if (from) {
-        const fromDate = new Date(from);
-        if (Number.isNaN(fromDate.getTime())) {
-          return res.status(400).json({ message: 'Invalid from date' });
-        }
-        filter.date.$gte = fromDate;
-      }
-      if (to) {
-        const toDate = new Date(to);
-        if (Number.isNaN(toDate.getTime())) {
-          return res.status(400).json({ message: 'Invalid to date' });
-        }
-        filter.date.$lte = toDate;
-      }
+    const matched = buildMatchFilter(req.user._id, req.query);
+    if (matched.error) {
+      return res.status(400).json({ message: matched.error });
     }
 
     const [expenses, total] = await Promise.all([
-      Expense.find(filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(limit),
-      Expense.countDocuments(filter),
+      Expense.find(matched.filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(limit),
+      Expense.countDocuments(matched.filter),
     ]);
 
     const totalPages = Math.ceil(total / limit) || 1;
 
     return res.status(200).json({
-      expenses: expenses.map(formatExpense),
+      expenses: expenses.map(formatRecord),
       meta: {
         total,
         page,
@@ -173,7 +239,7 @@ async function getExpense(req, res, next) {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
-    return res.status(200).json({ expense: formatExpense(expense) });
+    return res.status(200).json(formatRecord(expense));
   } catch (err) {
     return next(err);
   }
@@ -187,6 +253,47 @@ async function updateExpense(req, res, next) {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
+    const expense = await Expense.findOne({ _id: id, userId: req.user._id });
+    if (!expense) {
+      return res.status(404).json({ message: 'Expense not found' });
+    }
+
+    // Bulk: replace whole items array
+    if (Array.isArray(req.body.items) || Array.isArray(req.body.expenses)) {
+      const rawItems = req.body.items || req.body.expenses;
+      if (rawItems.length === 0) {
+        return res.status(400).json({ message: 'items cannot be empty' });
+      }
+      if (rawItems.length > 50) {
+        return res.status(400).json({ message: 'You can have at most 50 items' });
+      }
+
+      const items = [];
+      const errors = [];
+      rawItems.forEach((item, index) => {
+        const built = normalizeItem(item);
+        if (built.error) {
+          errors.push({ index, message: built.error });
+          return;
+        }
+        items.push(built.data);
+      });
+
+      if (errors.length > 0) {
+        return res.status(400).json({ message: 'Some expenses are invalid', errors });
+      }
+
+      const { totalAmount, date } = summarizeItems(items);
+      expense.kind = items.length > 1 ? 'bulk' : 'single';
+      expense.items = items;
+      expense.totalAmount = totalAmount;
+      expense.date = date;
+      await expense.save();
+
+      return res.status(200).json(formatRecord(expense));
+    }
+
+    // Single / one-line partial update (updates first item, or item by itemId)
     const allowed = ['title', 'amount', 'category', 'date', 'note'];
     const updates = {};
     for (const key of allowed) {
@@ -196,20 +303,26 @@ async function updateExpense(req, res, next) {
     }
 
     if (Object.keys(updates).length === 0) {
-      return res.status(400).json({ message: 'No valid fields to update' });
+      return res.status(400).json({
+        message: 'No valid fields to update (or send items[] for bulk)',
+      });
     }
 
-    const expense = await Expense.findOneAndUpdate(
-      { _id: id, userId: req.user._id },
-      { $set: updates },
-      { new: true, runValidators: true }
-    );
-
-    if (!expense) {
-      return res.status(404).json({ message: 'Expense not found' });
+    let target = expense.items[0];
+    if (req.body.itemId) {
+      target = expense.items.id(req.body.itemId);
+      if (!target) {
+        return res.status(404).json({ message: 'Item not found in this expense' });
+      }
     }
 
-    return res.status(200).json({ expense: formatExpense(expense) });
+    Object.assign(target, updates);
+    const { totalAmount, date } = summarizeItems(expense.items);
+    expense.totalAmount = totalAmount;
+    expense.date = date;
+    await expense.save();
+
+    return res.status(200).json(formatRecord(expense));
   } catch (err) {
     if (err.name === 'ValidationError') {
       const message = Object.values(err.errors)
@@ -229,6 +342,7 @@ async function deleteExpense(req, res, next) {
       return res.status(404).json({ message: 'Expense not found' });
     }
 
+    // Deletes the whole record (single OR entire bulk)
     const expense = await Expense.findOneAndDelete({
       _id: id,
       userId: req.user._id,

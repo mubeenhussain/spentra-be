@@ -100,16 +100,41 @@ const options = {
             'Other',
           ],
         },
-        Expense: {
+        ExpenseItem: {
           type: 'object',
           properties: {
             _id: { type: 'string' },
-            userId: { type: 'string' },
             title: { type: 'string', example: 'Lunch' },
-            amount: { type: 'number', example: 12.5 },
+            amount: { type: 'number', example: 100 },
             category: { $ref: '#/components/schemas/ExpenseCategory' },
             date: { type: 'string', format: 'date-time' },
-            note: { type: 'string', example: 'With coworkers' },
+            note: { type: 'string' },
+          },
+        },
+        Expense: {
+          type: 'object',
+          properties: {
+            kind: { type: 'string', enum: ['single', 'bulk'] },
+            _id: { type: 'string' },
+            userId: { type: 'string' },
+            title: {
+              type: 'string',
+              description: 'Present when kind=single',
+            },
+            amount: {
+              type: 'number',
+              description: 'Present when kind=single',
+            },
+            category: { $ref: '#/components/schemas/ExpenseCategory' },
+            date: { type: 'string', format: 'date-time' },
+            note: { type: 'string' },
+            totalAmount: { type: 'number', example: 30 },
+            count: { type: 'integer', example: 2 },
+            items: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/ExpenseItem' },
+              description: 'Always present. Bulk = multiple items in ONE DB record',
+            },
             createdAt: { type: 'string', format: 'date-time' },
             updatedAt: { type: 'string', format: 'date-time' },
           },
@@ -160,12 +185,22 @@ const options = {
         ExpenseBulkResponse: {
           type: 'object',
           properties: {
+            kind: { type: 'string', enum: ['bulk'], example: 'bulk' },
+            _id: { type: 'string' },
+            userId: { type: 'string' },
+            date: { type: 'string', format: 'date-time' },
+            totalAmount: { type: 'number', example: 30 },
             count: { type: 'integer', example: 2 },
-            expenses: {
+            items: {
               type: 'array',
-              items: { $ref: '#/components/schemas/Expense' },
+              items: { $ref: '#/components/schemas/ExpenseItem' },
             },
+            createdAt: { type: 'string', format: 'date-time' },
+            updatedAt: { type: 'string', format: 'date-time' },
           },
+        },
+        ExpenseListItem: {
+          $ref: '#/components/schemas/Expense',
         },
         ExpenseUpdateInput: {
           type: 'object',
@@ -175,11 +210,21 @@ const options = {
             category: { $ref: '#/components/schemas/ExpenseCategory' },
             date: { type: 'string', format: 'date-time' },
             note: { type: 'string' },
+            itemId: {
+              type: 'string',
+              description: 'Optional — update a specific item inside a bulk record',
+            },
+            items: {
+              type: 'array',
+              items: { $ref: '#/components/schemas/ExpenseInput' },
+              description: 'Replace all items (bulk edit)',
+            },
           },
         },
         ExpenseResponse: {
           type: 'object',
           properties: {
+            kind: { type: 'string', enum: ['single'] },
             expense: { $ref: '#/components/schemas/Expense' },
           },
         },
@@ -200,6 +245,8 @@ const options = {
             expenses: {
               type: 'array',
               items: { $ref: '#/components/schemas/Expense' },
+              description:
+                'Each list row is ONE DB document. Bulk rows have kind=bulk and items[]',
             },
             meta: { $ref: '#/components/schemas/PaginationMeta' },
           },

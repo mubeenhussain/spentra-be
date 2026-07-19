@@ -11,14 +11,8 @@ const CATEGORIES = [
   'Other',
 ];
 
-const expenseSchema = new mongoose.Schema(
+const lineItemSchema = new mongoose.Schema(
   {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
-      required: [true, 'User is required'],
-      index: true,
-    },
     title: {
       type: String,
       required: [true, 'Title is required'],
@@ -49,6 +43,46 @@ const expenseSchema = new mongoose.Schema(
       default: '',
     },
   },
+  { _id: true }
+);
+
+const expenseSchema = new mongoose.Schema(
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User',
+      required: [true, 'User is required'],
+      index: true,
+    },
+    kind: {
+      type: String,
+      enum: ['single', 'bulk'],
+      required: true,
+      default: 'single',
+      index: true,
+    },
+    items: {
+      type: [lineItemSchema],
+      required: true,
+      validate: {
+        validator(value) {
+          return Array.isArray(value) && value.length > 0;
+        },
+        message: 'At least one expense item is required',
+      },
+    },
+    // Denormalized for list sorting / date filters
+    date: {
+      type: Date,
+      required: [true, 'Date is required'],
+      index: true,
+    },
+    totalAmount: {
+      type: Number,
+      required: true,
+      min: [0.01, 'Total amount must be greater than 0'],
+    },
+  },
   {
     timestamps: true,
     toJSON: {
@@ -61,6 +95,7 @@ const expenseSchema = new mongoose.Schema(
 );
 
 expenseSchema.index({ userId: 1, date: -1 });
+expenseSchema.index({ userId: 1, kind: 1 });
 
 const Expense = mongoose.model('Expense', expenseSchema);
 

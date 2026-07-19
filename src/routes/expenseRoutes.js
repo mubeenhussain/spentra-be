@@ -56,8 +56,7 @@ router.post('/', createExpense);
  *     tags: [Expenses]
  *     summary: Create multiple expenses at once
  *     description: >
- *       Submit several expense rows in one request (e.g. Food, then Transport, then Rent).
- *       Each item is saved as its own expense document for the logged-in user.
+ *       Saves ALL rows in ONE MongoDB document (`kind: bulk`) with an `items` array.
  *     security:
  *       - bearerAuth: []
  *     requestBody:
@@ -94,7 +93,9 @@ router.post('/bulk', createExpensesBulk);
  *   get:
  *     tags: [Expenses]
  *     summary: List expenses
- *     description: Newest first. Supports date range, category filter, and pagination.
+ *     description: >
+ *       Newest first. Each row is one DB document. Bulk uploads are `kind: bulk` with `items[]`.
+ *       Single expenses are `kind: single`. Supports date range, category filter, and pagination.
  *     security:
  *       - bearerAuth: []
  *     parameters:
